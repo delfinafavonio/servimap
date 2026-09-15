@@ -1,0 +1,111 @@
+:root {
+  --font-logo: 'Playfair Display', serif;
+}
+
+.login-screen {
+  display: flex;
+  min-height: 100vh;
+  font-family: var(--font-body);
+}
+
+.login-hero {
+  flex: 1;
+  background-color: #1B4D4A;
+  color: #F5F0E6;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-logo {
+  font-family: var(--font-logo);
+  font-style: italic;
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.login-tagline {
+  font-size: 16px;
+  max-width: 300px;
+}
+
+.login-skyline {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+}
+
+.login-form-panel {
+  flex: 1;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 60px;
+}
+
+.login-form-panel h2 {
+  font-size: 24px;
+  margin-bottom: 24px;
+}
+
+.login-role-cards {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.login-role-card {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.login-role-card strong {
+  font-size: 14px;
+}
+
+.login-role-card span {
+  font-size: 12px;
+  color: #666;
+}
+
+.login-input {
+  border: none;
+  border-bottom: 1px solid #ccc;
+  padding: 12px 4px;
+  margin-bottom: 24px;
+  font-size: 14px;
+  outline: none;
+}
+
+.login-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 14px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.login-btn-primary {
+  background-color: #C98A93;
+  color: #fff;
+}
+
+.login-btn-secondary {
+  background-color: #1B4D4A;
+  color: #fff;
+}
