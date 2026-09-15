@@ -1,0 +1,123 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+enum RolUsuario {
+  ADMINISTRADOR
+  PRESTADOR
+  CLIENTE
+}
+
+enum EstadoSolicitud {
+  PENDIENTE
+  ACEPTADA
+  RECHAZADA
+  CANCELADA
+  FINALIZADA
+}
+
+model Usuario {
+  id            String     @id @default(uuid())
+  nombre        String
+  email         String     @unique
+  passwordHash  String     @map("password_hash")
+  fechaRegistro DateTime   @default(now()) @map("fecha_registro")
+  isActivo      Boolean    @default(true) @map("is_activo")
+  rol           RolUsuario
+
+  administrador Administrador?
+  prestador     Prestador?
+  cliente       Cliente?
+
+  @@map("usuarios")
+}
+
+model Administrador {
+  id        String  @id @default(uuid())
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+  usuarioId String  @unique @map("usuario_id")
+
+  @@map("administradores")
+}
+
+model Prestador {
+  id                     String   @id @default(uuid())
+  usuario                Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId              String   @unique @map("usuario_id")
+  descripcionProfesional String   @map("descripcion_profesional")
+  fotoPerfil             String?  @map("foto_perfil")
+  zonaCobertura          String   @map("zona_cobertura")
+  latitud                Decimal
+  longitud               Decimal
+  rangoPrecioAprox       String?  @map("rango_precio_aprox")
+  isDisponible           Boolean  @default(true) @map("is_disponible")
+
+  oficios     Oficio[]
+  solicitudes Solicitud[]
+
+  @@map("prestadores")
+}
+
+model Cliente {
+  id                String   @id @default(uuid())
+  usuario           Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId         String   @unique @map("usuario_id")
+  latitudUbicacion  Decimal? @map("latitud_ubicacion")
+  longitudUbicacion Decimal? @map("longitud_ubicacion")
+
+  solicitudes Solicitud[]
+
+  @@map("clientes")
+}
+
+model Oficio {
+  id        String  @id @default(uuid())
+  nombre    String
+  categoria String
+  isActivo  Boolean @default(true) @map("is_activo")
+
+  prestadores Prestador[]
+  solicitudes Solicitud[]
+
+  @@map("oficios")
+}
+
+model Solicitud {
+  id                 String          @id @default(uuid())
+  descripcion        String
+  estado             EstadoSolicitud @default(PENDIENTE)
+  fechaCreacion      DateTime        @default(now()) @map("fecha_creacion")
+  fechaActualizacion DateTime        @updatedAt @map("fecha_actualizacion")
+
+  cliente     Cliente   @relation(fields: [clienteId], references: [id])
+  clienteId   String    @map("cliente_id")
+  prestador   Prestador @relation(fields: [prestadorId], references: [id])
+  prestadorId String    @map("prestador_id")
+  oficio      Oficio    @relation(fields: [oficioId], references: [id])
+  oficioId    String    @map("oficio_id")
+
+  calificacion Calificacion?
+
+  @@map("solicitudes")
+}
+
+model Calificacion {
+  id               String   @id @default(uuid())
+  puntaje          Int
+  comentario       String
+  fechaPublicacion DateTime @default(now()) @map("fecha_publicacion")
+  isModerada       Boolean  @default(false) @map("is_moderada")
+
+  solicitud   Solicitud @relation(fields: [solicitudId], references: [id])
+  solicitudId String    @unique @map("solicitud_id")
+
+  @@map("calificaciones")
+}
