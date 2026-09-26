@@ -74,6 +74,12 @@ async function cambiarEstado(req, res) {
     data.fechaPropuesta = fechaPropuesta;
     data.notaPropuesta = validateString(req.body.notaPropuesta, 'notaPropuesta', { max: 1000, optional: true }) || null;
   }
+  if (req.usuario.rol === 'PRESTADOR' && req.body.estado === 'FINALIZADA') {
+    if (!solicitud.fechaPropuesta || solicitud.fechaPropuesta > new Date()) {
+      throw new ApiError(409, 'Todavía no podés finalizar el trabajo: esperá hasta la fecha y hora acordadas');
+    }
+    data.fechaFinalizacion = new Date();
+  }
   const result = await prisma.solicitud.updateMany({ where: { id: solicitud.id, estado: solicitud.estado }, data });
   if (result.count !== 1) throw new ApiError(409, 'La solicitud fue modificada por otra operación. Actualizá la pantalla.');
   res.json(present(await prisma.solicitud.findUnique({ where: { id: solicitud.id }, include }), req.usuario.rol));

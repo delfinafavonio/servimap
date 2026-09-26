@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { canTransition } = require('../src/utils/solicitudes');
 const { normalizeEmail, parseCoordinates, publicUser, requireFields, validateRating } = require('../src/utils/validation');
 const { hasRole } = require('../src/utils/permissions');
+const { uploadProfileImage } = require('../src/utils/imageUpload');
 
 test('normaliza correos sin exponer el hash del usuario', () => {
   assert.equal(normalizeEmail('  Persona@Ejemplo.COM '), 'persona@ejemplo.com');
@@ -12,7 +13,14 @@ test('normaliza correos sin exponer el hash del usuario', () => {
 test('valida campos obligatorios y coordenadas', () => {
   assert.throws(() => requireFields({ nombre: '' }, ['nombre', 'email']), /nombre, email/);
   assert.deepEqual(parseCoordinates('-34.60', '-58.38'), { latitud: -34.6, longitud: -58.38 });
+  assert.deepEqual(parseCoordinates(null, null), { latitud: null, longitud: null });
+  assert.throws(() => parseCoordinates('-34.60', ''), /juntas/);
   assert.throws(() => parseCoordinates('100', '20'), /coordenadas/);
+});
+
+test('rechaza fotos de perfil con formato o tamaño inválido antes de subirlas', async () => {
+  await assert.rejects(() => uploadProfileImage('data:image/gif;base64,R0lGODlh', 'perfil'), /JPG, PNG o WebP/);
+  await assert.rejects(() => uploadProfileImage(`data:image/png;base64,${Buffer.alloc(2 * 1024 * 1024 + 1).toString('base64')}`, 'perfil'), /2 MB/);
 });
 
 test('aplica permisos estrictos por rol', () => {

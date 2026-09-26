@@ -10,13 +10,19 @@ function tokenFor(usuario) {
 }
 
 function setSession(res, token) {
+  const production = process.env.NODE_ENV === 'production';
   res.cookie('servimap_session', token, {
     httpOnly: true,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: production ? 'none' : 'lax',
+    secure: production,
     maxAge: 8 * 60 * 60 * 1000,
     path: '/',
   });
+}
+
+function clearSession(res) {
+  const production = process.env.NODE_ENV === 'production';
+  res.clearCookie('servimap_session', { httpOnly: true, sameSite: production ? 'none' : 'lax', secure: production, path: '/' });
 }
 
 async function registro(req, res) {
@@ -30,8 +36,8 @@ async function registro(req, res) {
   if (String(password).length < 8) throw new ApiError(400, 'La contraseña debe tener al menos 8 caracteres');
   if (password !== confirmacion) throw new ApiError(400, 'Las contraseñas no coinciden');
 
-  const existing = await prisma.usuario.findUnique({ where: { email } });
-  if (existing) throw new ApiError(409, 'Ya existe una cuenta con ese correo');
+  const existing = await prisma.usuario.findUnique({ where: { email_rol: { email, rol } } });
+  if (existing) throw new ApiError(409, 'Ya existe una cuenta con ese correo y rol');
   const passwordHash = await bcrypt.hash(password, 12);
 
   try {
@@ -44,14 +50,16 @@ async function registro(req, res) {
     setSession(res, tokenFor(usuario));
     res.status(201).json({ usuario: publicUser(usuario) });
   } catch (error) {
-    if (error.code === 'P2002') throw new ApiError(409, 'Ya existe una cuenta con ese correo');
+    if (error.code === 'P2002') throw new ApiError(409, 'Ya existe una cuenta con ese correo y rol');
     throw error;
   }
 }
 
 async function login(req, res) {
-  requireFields(req.body, ['email', 'password']);
-  const usuario = await prisma.usuario.findUnique({ where: { email: normalizeEmail(req.body.email) } });
+  requireFields(req.body, ['email', 'password', 'rol']);
+  if (!['CLIENTE', 'PRESTADOR', 'ADMINISTRADOR'].includes(req.body.rol)) throw new ApiError(400, 'El rol seleccionado no es válido');
+  const email = normalizeEmail(req.body.email);
+  const usuario = await prisma.usuario.findUnique({ where: { email_rol: { email, rol: req.body.rol } } });
   const valid = usuario ? await bcrypt.compare(req.body.password, usuario.passwordHash) : false;
   if (!valid) throw new ApiError(401, 'Correo o contraseña incorrectos');
   if (!usuario.isActivo) throw new ApiError(403, 'La cuenta está desactivada');
@@ -64,7 +72,7 @@ async function me(req, res) {
 }
 
 function logout(_req, res) {
-  res.clearCookie('servimap_session', { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production', path: '/' });
+  clearSession(res);
   res.status(204).end();
 }
 

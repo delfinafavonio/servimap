@@ -9,6 +9,10 @@ function requireFields(body, fields) {
 
 function parseCoordinates(latitud, longitud) {
   if (latitud === undefined && longitud === undefined) return {};
+  const latitudeEmpty = latitud === null || latitud === '';
+  const longitudeEmpty = longitud === null || longitud === '';
+  if (latitudeEmpty && longitudeEmpty) return { latitud: null, longitud: null };
+  if (latitudeEmpty || longitudeEmpty) throw new ApiError(400, 'Las coordenadas deben indicarse juntas');
   const lat = Number(latitud);
   const lng = Number(longitud);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {

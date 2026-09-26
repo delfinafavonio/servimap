@@ -109,3 +109,15 @@
   background-color: #1B4D4A;
   color: #fff;
 }
+
+.login-intro { color: #66706f; margin: -14px 0 24px; }
+.login-role-card.selected { border-color: #1B4D4A; background: #edf5f2; box-shadow: 0 0 0 2px rgba(27, 77, 74, .1); }
+.login-btn { text-align: center; text-decoration: none; font-family: inherit; }
+.login-btn:disabled { opacity: .6; cursor: wait; }
+
+@media (max-width: 760px) {
+  .login-screen { flex-direction: column; }
+  .login-hero { min-height: 260px; padding: 36px 24px 80px; }
+  .login-logo { font-size: 42px; }
+  .login-form-panel { padding: 38px 24px; }
+}

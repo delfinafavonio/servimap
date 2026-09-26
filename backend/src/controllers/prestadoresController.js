@@ -1,6 +1,7 @@
 const prisma = require('../prismaClient');
 const { ApiError } = require('../utils/http');
 const { parseCoordinates, parseBoolean, validateString, validateImageUrl } = require('../utils/validation');
+const { uploadProfileImage } = require('../utils/imageUpload');
 
 const perfilInclude = {
   usuario: { select: { nombre: true, apellido: true } },
@@ -14,7 +15,6 @@ const perfilInclude = {
 function isComplete(prestador) {
   return Boolean(
     prestador.descripcionProfesional && prestador.zonaCobertura && prestador.telefono &&
-    prestador.latitud !== null && prestador.longitud !== null &&
     prestador.oficios?.some((item) => item.isDisponible && item.oficio.isActivo)
   );
 }
@@ -38,6 +38,9 @@ function present(prestador, { privateView = false } = {}) {
       nombre: item.oficio.nombre,
       categoria: item.oficio.categoria,
       precio: item.precio === null ? null : Number(item.precio),
+      modalidadPrecio: item.modalidadPrecio,
+      precioMinimo: item.precioMinimo === null ? null : Number(item.precioMinimo),
+      precioMaximo: item.precioMaximo === null ? null : Number(item.precioMaximo),
       isDisponible: item.isDisponible,
     })),
     promedioCalificaciones: ratings.length ? Number((ratings.reduce((sum, item) => sum + item.puntaje, 0) / ratings.length).toFixed(1)) : null,
@@ -62,10 +65,12 @@ async function buscar(req, res) {
     descripcionProfesional: { not: null },
     zonaCobertura: { not: null },
     telefono: { not: null },
-    latitud: { not: null },
-    longitud: { not: null },
     oficios: { some: { isDisponible: true, oficio: { isActivo: true, ...(oficioId ? { id: oficioId } : {}) } } },
   };
+  if (distancia !== undefined) {
+    where.latitud = { not: null };
+    where.longitud = { not: null };
+  }
   if (zona) where.zonaCobertura = { contains: String(zona), mode: 'insensitive' };
   if (texto) {
     where.OR = [
@@ -114,15 +119,32 @@ async function actualizarPerfil(req, res) {
   res.json(present(updated, { privateView: true }));
 }
 
+async function subirFoto(req, res) {
+  const fotoPerfil = await uploadProfileImage(req.body.dataUrl, `prestador-${req.usuario.prestador.id}`);
+  const updated = await prisma.prestador.update({ where: { id: req.usuario.prestador.id }, data: { fotoPerfil }, include: perfilInclude });
+  res.json(present(updated, { privateView: true }));
+}
+
 async function guardarOficio(req, res) {
   const oficio = await prisma.oficio.findFirst({ where: { id: req.params.oficioId, isActivo: true } });
   if (!oficio) throw new ApiError(404, 'Oficio activo no encontrado');
-  const precio = req.body.precio === '' || req.body.precio === null ? null : Number(req.body.precio);
-  if (precio !== null && (!Number.isFinite(precio) || precio < 0)) throw new ApiError(400, 'El precio no es válido');
+  const modalidadPrecio = req.body.modalidadPrecio || 'FIJO';
+  if (!['FIJO', 'RANGO'].includes(modalidadPrecio)) throw new ApiError(400, 'La modalidad de precio no es válida');
+  const parsePrice = (value) => value === '' || value === null || value === undefined ? null : Number(value);
+  let precio = null; let precioMinimo = null; let precioMaximo = null;
+  if (modalidadPrecio === 'FIJO') {
+    precio = parsePrice(req.body.precio);
+    if (precio === null || !Number.isFinite(precio) || precio <= 0 || precio > 9999999999.99) throw new ApiError(400, 'El precio fijo debe ser un importe positivo');
+  } else {
+    precioMinimo = parsePrice(req.body.precioMinimo); precioMaximo = parsePrice(req.body.precioMaximo);
+    if (![precioMinimo, precioMaximo].every((value) => value !== null && Number.isFinite(value) && value > 0 && value <= 9999999999.99)) throw new ApiError(400, 'El rango debe contener importes positivos');
+    if (precioMinimo > precioMaximo) throw new ApiError(400, 'El precio mínimo no puede superar al máximo');
+  }
+  const priceData = { modalidadPrecio, precio, precioMinimo, precioMaximo };
   const item = await prisma.prestadorOficio.upsert({
     where: { oficioId_prestadorId: { oficioId: oficio.id, prestadorId: req.usuario.prestador.id } },
-    create: { oficioId: oficio.id, prestadorId: req.usuario.prestador.id, precio, isDisponible: req.body.isDisponible === undefined ? true : parseBoolean(req.body.isDisponible, 'isDisponible') },
-    update: { precio, isDisponible: req.body.isDisponible === undefined ? true : parseBoolean(req.body.isDisponible, 'isDisponible') },
+    create: { oficioId: oficio.id, prestadorId: req.usuario.prestador.id, ...priceData, isDisponible: req.body.isDisponible === undefined ? true : parseBoolean(req.body.isDisponible, 'isDisponible') },
+    update: { ...priceData, isDisponible: req.body.isDisponible === undefined ? true : parseBoolean(req.body.isDisponible, 'isDisponible') },
     include: { oficio: true },
   });
   res.json(item);
@@ -133,8 +155,9 @@ async function eliminarOficio(req, res) {
   const item = await prisma.prestadorOficio.findUnique({ where });
   if (!item) throw new ApiError(404, 'El oficio no está asociado al perfil');
   await prisma.prestadorOficio.delete({ where });
-  await prisma.prestador.update({ where: { id: req.usuario.prestador.id }, data: { isDisponible: false } });
+  const remaining = await prisma.prestadorOficio.count({ where: { prestadorId: req.usuario.prestador.id, isDisponible: true, oficio: { isActivo: true } } });
+  if (remaining === 0) await prisma.prestador.update({ where: { id: req.usuario.prestador.id }, data: { isDisponible: false } });
   res.status(204).end();
 }
 
-module.exports = { buscar, obtener, miPerfil, actualizarPerfil, guardarOficio, eliminarOficio, isComplete, present };
+module.exports = { buscar, obtener, miPerfil, actualizarPerfil, subirFoto, guardarOficio, eliminarOficio, isComplete, present };

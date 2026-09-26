@@ -7,10 +7,11 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = require('./swagger');
 
 const app = express();
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 const origins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map((value) => value.trim());
 app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", "'unsafe-inline'"], styleSrc: ["'self'", "'unsafe-inline'"], imgSrc: ["'self'", 'data:'] } } }));
 app.use(cors({ origin: origins, credentials: true }));
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '3mb' }));
 app.use(cookieParser());
 
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: process.env.NODE_ENV === 'test' ? 1000 : 10, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Demasiados intentos. Probá nuevamente en unos minutos.' } });

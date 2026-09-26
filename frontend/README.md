@@ -1,16 +1,32 @@
-# React + Vite
+# Frontend de ServiMap
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Cliente React 19 de ServiMap. Usa React Router, Axios, Leaflet/OpenStreetMap y la identidad visual verde petróleo, rosa apagado y crema.
 
-Currently, two official plugins are available:
+## Configuración
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```powershell
+npm install
+Copy-Item .env.example .env
+npm run dev
+```
 
-## React Compiler
+Variable requerida:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```dotenv
+VITE_API_URL="http://localhost:3000/api"
+```
 
-## Expanding the ESLint configuration
+El backend debe permitir `http://localhost:5173` en `CORS_ORIGIN`. La sesión usa una cookie JWT HttpOnly; Axios tiene `withCredentials` habilitado.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Comandos
+
+```powershell
+npm run dev
+npm test
+npm run test:watch
+npm run lint
+npm run build
+npm run preview
+```
+
+Las pruebas de componentes cubren login, autorización por rol, edición administrativa de oficios y búsqueda/mapa con coordenadas aproximadas.

@@ -28,7 +28,7 @@ async function register(agent, rol, prefix) {
   const payload = { nombre: prefix, apellido: 'Prueba', email: email(prefix), password, confirmacion: password, rol };
   const response = await agent.post('/api/auth/registro').send(payload);
   assert.equal(response.status, 201, response.text);
-  assert.ok(response.headers['set-cookie']?.some((cookie) => cookie.includes('HttpOnly') && cookie.includes('SameSite=Strict')));
+  assert.ok(response.headers['set-cookie']?.some((cookie) => cookie.includes('HttpOnly') && cookie.includes('SameSite=Lax')));
   assert.equal(response.body.usuario.rol, rol);
   assert.equal(response.body.usuario.passwordHash, undefined);
   return { ...payload, usuario: response.body.usuario };
@@ -42,20 +42,47 @@ test('recorrido integral y reglas de seguridad sobre PostgreSQL aislado', async 
   const adminEmail = email('admin');
   const adminUser = await prisma.usuario.create({ data: { nombre: 'Admin', apellido: 'Prueba', email: adminEmail, passwordHash: await bcrypt.hash(password, 12), rol: 'ADMINISTRADOR', administrador: { create: {} } } });
   const admin = request.agent(app);
-  assert.equal((await admin.post('/api/auth/login').send({ email: adminEmail, password })).status, 200);
+  assert.equal((await admin.post('/api/auth/login').send({ email: adminEmail, password, rol: 'ADMINISTRADOR' })).status, 200);
 
   const client = request.agent(app); const clientData = await register(client, 'CLIENTE', 'cliente');
   const otherClient = request.agent(app); await register(otherClient, 'CLIENTE', 'cliente-ajeno');
-  const provider = request.agent(app); await register(provider, 'PRESTADOR', 'prestador');
+  const provider = request.agent(app); const providerData = await register(provider, 'PRESTADOR', 'prestador');
   const otherProvider = request.agent(app); await register(otherProvider, 'PRESTADOR', 'prestador-ajeno');
+  const coordinateFreeProvider = request.agent(app); await register(coordinateFreeProvider, 'PRESTADOR', 'prestador-sin-coordenadas');
+  const sharedEmail = email('doble-cuenta');
+  const sharedClientPassword = `Cliente-${password}`;
+  const sharedProviderPassword = `Prestador-${password}`;
+  const sharedClient = request.agent(app);
+  const sharedProvider = request.agent(app);
+  let sharedClientId;
+  let sharedProviderId;
 
   await t.test('autenticación, JWT y roles', async () => {
     assert.equal((await request(app).post('/api/auth/registro').send({ nombre: 'A', apellido: 'B', email: email('bad'), password: 'corta', confirmacion: 'corta', rol: 'CLIENTE' })).status, 400);
     assert.equal((await request(app).post('/api/auth/registro').send({ ...clientData, confirmacion: password })).status, 409);
     assert.equal((await request(app).post('/api/auth/registro').send({ nombre: 'Admin', apellido: 'Ilegal', email: email('admin-publico'), password, confirmacion: password, rol: 'ADMINISTRADOR' })).status, 400);
-    assert.equal((await request(app).post('/api/auth/login').send({ email: clientData.email, password: 'incorrecta' })).status, 401);
+    assert.equal((await request(app).post('/api/auth/login').send({ email: clientData.email, password: 'incorrecta', rol: 'CLIENTE' })).status, 401);
+    assert.equal((await request(app).post('/api/auth/login').send({ email: clientData.email, password, rol: 'CLIENTE' })).status, 200);
+    assert.equal((await request(app).post('/api/auth/login').send({ email: providerData.email, password, rol: 'PRESTADOR' })).status, 200);
+    const clientAsProvider = request.agent(app);
+    assert.equal((await clientAsProvider.post('/api/auth/login').send({ email: clientData.email, password, rol: 'PRESTADOR' })).status, 401);
+    assert.equal((await clientAsProvider.get('/api/auth/me')).status, 401);
+    const providerAsClient = request.agent(app);
+    assert.equal((await providerAsClient.post('/api/auth/login').send({ email: providerData.email, password, rol: 'CLIENTE' })).status, 401);
+    assert.equal((await providerAsClient.get('/api/auth/me')).status, 401);
+    const sharedBase = { nombre: 'Cuenta', apellido: 'Compartida', email: sharedEmail };
+    let sharedResponse = await sharedClient.post('/api/auth/registro').send({ ...sharedBase, password: sharedClientPassword, confirmacion: sharedClientPassword, rol: 'CLIENTE' });
+    assert.equal(sharedResponse.status, 201); sharedClientId = sharedResponse.body.usuario.id;
+    sharedResponse = await sharedProvider.post('/api/auth/registro').send({ ...sharedBase, password: sharedProviderPassword, confirmacion: sharedProviderPassword, rol: 'PRESTADOR' });
+    assert.equal(sharedResponse.status, 201); sharedProviderId = sharedResponse.body.usuario.id;
+    assert.notEqual(sharedClientId, sharedProviderId);
+    assert.equal((await request(app).post('/api/auth/registro').send({ ...sharedBase, password: sharedClientPassword, confirmacion: sharedClientPassword, rol: 'CLIENTE' })).status, 409);
+    assert.equal((await request(app).post('/api/auth/registro').send({ ...sharedBase, password: sharedProviderPassword, confirmacion: sharedProviderPassword, rol: 'PRESTADOR' })).status, 409);
+    assert.equal((await request(app).post('/api/auth/login').send({ email: sharedEmail.toUpperCase(), password: sharedClientPassword, rol: 'CLIENTE' })).body.usuario.id, sharedClientId);
+    assert.equal((await request(app).post('/api/auth/login').send({ email: ` ${sharedEmail} `, password: sharedProviderPassword, rol: 'PRESTADOR' })).body.usuario.id, sharedProviderId);
+    assert.equal((await request(app).post('/api/auth/login').send({ email: sharedEmail, password: sharedProviderPassword, rol: 'CLIENTE' })).status, 401);
     const loginAgent = request.agent(app);
-    assert.equal((await loginAgent.post('/api/auth/login').send({ email: clientData.email, password })).status, 200);
+    assert.equal((await loginAgent.post('/api/auth/login').send({ email: clientData.email, password, rol: 'CLIENTE' })).status, 200);
     assert.equal((await loginAgent.get('/api/auth/me')).status, 200);
     assert.equal((await request(app).get('/api/auth/me')).status, 401);
     assert.equal((await request(app).get('/api/auth/me').set('Authorization', 'Bearer inválido')).status, 401);
@@ -64,12 +91,16 @@ test('recorrido integral y reglas de seguridad sobre PostgreSQL aislado', async 
     assert.equal((await client.post('/api/oficios').send({ nombre: 'Prohibido', categoria: 'Prueba' })).status, 403);
     const inactive = request.agent(app); const inactiveData = await register(inactive, 'CLIENTE', 'inactivo');
     await prisma.usuario.update({ where: { id: inactiveData.usuario.id }, data: { isActivo: false } });
-    assert.equal((await request(app).post('/api/auth/login').send({ email: inactiveData.email, password })).status, 403);
-    assert.equal((await loginAgent.post('/api/auth/logout')).status, 204);
+    assert.equal((await request(app).post('/api/auth/login').send({ email: inactiveData.email, password, rol: 'CLIENTE' })).status, 403);
+    const logoutResponse = await loginAgent.post('/api/auth/logout');
+    assert.equal(logoutResponse.status, 204); assert.match(logoutResponse.headers['set-cookie'][0], /servimap_session=;/);
     assert.equal((await loginAgent.get('/api/auth/me')).status, 401);
+    assert.equal((await client.get('/api/prestadores/me')).status, 403);
+    assert.equal((await provider.get('/api/clientes/me')).status, 403);
   });
 
   const electricidad = await prisma.oficio.findUnique({ where: { nombre: 'Electricidad' } });
+  const carpinteria = await prisma.oficio.findUnique({ where: { nombre: 'Carpintería' } });
   const plomeria = await prisma.oficio.findUnique({ where: { nombre: 'Plomería' } });
 
   await t.test('oficios, perfil, privacidad y búsqueda', async () => {
@@ -83,6 +114,26 @@ test('recorrido integral y reglas de seguridad sobre PostgreSQL aislado', async 
     assert.equal(response.status, 200); assert.equal(response.body.isDisponible, false, 'Perfil sin oficio no debe activarse');
     response = await provider.put(`/api/prestadores/me/oficios/${electricidad.id}`).send({ precio: 25000, isDisponible: true });
     assert.equal(response.status, 200); assert.equal(Number(response.body.precio), 25000);
+    response = await provider.put(`/api/prestadores/me/oficios/${electricidad.id}`).send({ precio: 31000, isDisponible: true });
+    assert.equal(response.status, 200); assert.equal(Number(response.body.precio), 31000);
+    response = await provider.put(`/api/prestadores/me/oficios/${electricidad.id}`).send({ modalidadPrecio: 'RANGO', precioMinimo: 20000, precioMaximo: 50000, precio: 999999, isDisponible: true });
+    assert.equal(response.status, 200); assert.equal(response.body.modalidadPrecio, 'RANGO'); assert.equal(response.body.precio, null); assert.equal(Number(response.body.precioMinimo), 20000); assert.equal(Number(response.body.precioMaximo), 50000);
+    assert.equal((await provider.put(`/api/prestadores/me/oficios/${electricidad.id}`).send({ modalidadPrecio: 'RANGO', precioMinimo: 50000, precioMaximo: 20000, isDisponible: true })).status, 400);
+    assert.equal((await provider.put(`/api/prestadores/me/oficios/${electricidad.id}`).send({ modalidadPrecio: 'FIJO', precio: 0, isDisponible: true })).status, 400);
+    response = await provider.put(`/api/prestadores/me/oficios/${electricidad.id}`).send({ modalidadPrecio: 'FIJO', precio: 31000, precioMinimo: 1, precioMaximo: 2, isDisponible: true });
+    assert.equal(response.status, 200); assert.equal(Number(response.body.precio), 31000); assert.equal(response.body.precioMinimo, null); assert.equal(response.body.precioMaximo, null);
+    const vidrieria = await admin.post('/api/oficios').send({ nombre: 'Vidriería', categoria: 'Construcción' });
+    assert.equal(vidrieria.status, 201);
+    response = await provider.put(`/api/prestadores/me/oficios/${vidrieria.body.id}`).send({ precio: 25000, isDisponible: true });
+    assert.equal(response.status, 200); assert.equal(response.body.oficio.nombre, 'Vidriería'); assert.equal(Number(response.body.precio), 25000);
+    const reloadedProfile = await provider.get('/api/prestadores/me');
+    const savedVidrieria = reloadedProfile.body.oficios.find((item) => item.id === vidrieria.body.id);
+    assert.equal(savedVidrieria.nombre, 'Vidriería'); assert.equal(savedVidrieria.precio, 25000);
+    assert.equal(reloadedProfile.body.oficios.find((item) => item.id === electricidad.id).precio, 31000);
+    assert.equal(await prisma.prestadorOficio.count({ where: { prestadorId: reloadedProfile.body.id, oficioId: electricidad.id } }), 1);
+    await provider.put(`/api/prestadores/me/oficios/${vidrieria.body.id}`).send({ modalidadPrecio: 'RANGO', precioMinimo: 20000, precioMaximo: 50000, isDisponible: true });
+    const persistedRange = (await provider.get('/api/prestadores/me')).body.oficios.find((item) => item.id === vidrieria.body.id);
+    assert.equal(persistedRange.modalidadPrecio, 'RANGO'); assert.equal(persistedRange.precio, null); assert.equal(persistedRange.precioMinimo, 20000); assert.equal(persistedRange.precioMaximo, 50000);
     response = await provider.put('/api/prestadores/me').send(profile);
     assert.equal(response.status, 200); assert.equal(response.body.isDisponible, true);
     assert.equal(response.body.latitud, -34.58321, 'El dueño ve su coordenada privada');
@@ -101,6 +152,37 @@ test('recorrido integral y reglas de seguridad sobre PostgreSQL aislado', async 
     assert.equal((await client.get('/api/prestadores?zona=Córdoba')).body.length, 0, 'Perfil incompleto/no disponible debe excluirse');
     const publicProfile = await client.get(`/api/prestadores/${providerId}`);
     assert.equal(publicProfile.body.latitud, -34.58);
+
+    await coordinateFreeProvider.put(`/api/prestadores/me/oficios/${carpinteria.id}`).send({ precio: 25000, isDisponible: true });
+    const coordinateFreeProfile = await coordinateFreeProvider.put('/api/prestadores/me').send({ descripcionProfesional: 'Carpintería a medida.', zonaCobertura: 'Centro', telefono: '1100000001', latitud: null, longitud: null, isDisponible: true });
+    assert.equal(coordinateFreeProfile.status, 200); assert.equal(coordinateFreeProfile.body.isDisponible, true);
+    const carpenters = await client.get(`/api/prestadores?oficioId=${carpinteria.id}`);
+    assert.equal(carpenters.status, 200); assert.ok(carpenters.body.some((item) => item.id === coordinateFreeProfile.body.id));
+    assert.ok((await client.get(`/api/prestadores?oficioId=${carpinteria.id}&zona=Centro`)).body.some((item) => item.id === coordinateFreeProfile.body.id));
+    assert.ok(!(await client.get(`/api/prestadores?oficioId=${carpinteria.id}&latitud=-34.6&longitud=-58.4&distancia=10`)).body.some((item) => item.id === coordinateFreeProfile.body.id));
+
+    await otherProvider.put(`/api/prestadores/me/oficios/${electricidad.id}`).send({ precio: 999, isDisponible: true });
+    assert.equal((await provider.get('/api/prestadores/me')).body.oficios.find((item) => item.id === electricidad.id).precio, 31000);
+    await provider.delete(`/api/prestadores/me/oficios/${vidrieria.body.id}`);
+    assert.equal((await provider.get('/api/prestadores/me')).body.isDisponible, true, 'Quitar un oficio no debe desactivar al prestador si conserva otro disponible');
+  });
+
+  await t.test('cuentas con correo compartido mantienen perfiles y solicitudes aislados', async () => {
+    await sharedClient.put('/api/clientes/me').send({ latitudUbicacion: -34.6, longitudUbicacion: -58.4 });
+    await sharedProvider.put('/api/prestadores/me/oficios/' + electricidad.id).send({ precio: 25000, isDisponible: true });
+    await sharedProvider.put('/api/prestadores/me').send({ descripcionProfesional: 'Perfil prestador independiente.', zonaCobertura: 'Centro', telefono: '1100000000', latitud: -34.61, longitud: -58.41, isDisponible: true });
+    const clientProfile = await sharedClient.get('/api/clientes/me');
+    const providerProfile = await sharedProvider.get('/api/prestadores/me');
+    assert.equal(clientProfile.status, 200); assert.equal(providerProfile.status, 200);
+    assert.equal(providerProfile.body.descripcionProfesional, 'Perfil prestador independiente.');
+    assert.equal((await sharedClient.get('/api/prestadores/me')).status, 403);
+    assert.equal((await sharedProvider.get('/api/clientes/me')).status, 403);
+    const created = await sharedClient.post('/api/solicitudes').send({ prestadorId: providerProfile.body.id, oficioId: electricidad.id, descripcion: 'Solicitud entre cuentas independientes.' });
+    assert.equal(created.status, 201);
+    assert.ok((await sharedClient.get('/api/solicitudes')).body.some((item) => item.id === created.body.id));
+    assert.ok((await sharedProvider.get('/api/solicitudes')).body.some((item) => item.id === created.body.id));
+    assert.ok(!(await client.get('/api/solicitudes')).body.some((item) => item.id === created.body.id));
+    assert.ok(!(await provider.get('/api/solicitudes')).body.some((item) => item.id === created.body.id));
   });
 
   const activeProvider = await prisma.prestador.findFirst({ where: { zonaCobertura: 'Palermo, Buenos Aires' } });
@@ -116,8 +198,17 @@ test('recorrido integral y reglas de seguridad sobre PostgreSQL aislado', async 
     assert.equal((await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'ACEPTADA', fechaPropuesta: new Date(Date.now() - 86_400_000).toISOString() })).status, 400);
     const accepted = await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'ACEPTADA', fechaPropuesta: futureProposal, notaPropuesta: 'Disponible por la tarde.' });
     assert.equal(accepted.status, 200); assert.equal(accepted.body.notaPropuesta, 'Disponible por la tarde.');
+    const visibleToClient = await client.get(`/api/solicitudes/${id}`);
+    assert.equal(visibleToClient.status, 200); assert.equal(visibleToClient.body.estado, 'ACEPTADA'); assert.equal(visibleToClient.body.fechaPropuesta, futureProposal);
+    assert.equal((await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'ACEPTADA', fechaPropuesta: futureProposal })).status, 409);
     assert.equal((await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'RECHAZADA' })).status, 409);
-    assert.equal((await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'FINALIZADA' })).status, 200);
+    assert.equal((await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'FINALIZADA' })).status, 409);
+    await prisma.solicitud.update({ where: { id }, data: { fechaPropuesta: new Date(Date.now() - 60_000) } });
+    const finalized = await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'FINALIZADA' });
+    assert.equal(finalized.status, 200); assert.ok(finalized.body.fechaFinalizacion);
+    const reloaded = await provider.get('/api/solicitudes');
+    assert.ok(reloaded.body.some((item) => item.id === id && item.estado === 'FINALIZADA' && item.fechaFinalizacion));
+    assert.ok(!(await otherProvider.get('/api/solicitudes')).body.some((item) => item.id === id));
 
     const cancellable = await client.post('/api/solicitudes').send({ prestadorId: activeProvider.id, oficioId: electricidad.id, descripcion: 'Solicitud para cancelar.' });
     assert.equal((await client.patch(`/api/solicitudes/${cancellable.body.id}/estado`).send({ estado: 'CANCELADA' })).status, 200);
@@ -140,7 +231,7 @@ test('recorrido integral y reglas de seguridad sobre PostgreSQL aislado', async 
     assert.equal((await client.post('/api/calificaciones').send({ solicitudId: finished.id, puntaje: 6, comentario: 'Fuera de rango.' })).status, 400);
 
     const secondSession = request.agent(app);
-    assert.equal((await secondSession.post('/api/auth/login').send({ email: clientData.email, password })).status, 200);
+    assert.equal((await secondSession.post('/api/auth/login').send({ email: clientData.email, password, rol: 'CLIENTE' })).status, 200);
     const ratings = await Promise.all([
       client.post('/api/calificaciones').send({ solicitudId: finished.id, puntaje: 5, comentario: 'Excelente trabajo y muy buena atención.' }),
       secondSession.post('/api/calificaciones').send({ solicitudId: finished.id, puntaje: 4, comentario: 'Intento simultáneo.' }),

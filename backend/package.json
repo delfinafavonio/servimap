@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
@@ -12,6 +15,7 @@
     "test:e2e": "node scripts/runE2E.js",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
+    "db:deploy": "prisma migrate deploy",
     "admin:create": "node scripts/createAdmin.js",
     "seed": "node scripts/seed.js",
     "seed:demo": "node scripts/seedDemo.js"

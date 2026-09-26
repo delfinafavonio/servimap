@@ -25,11 +25,16 @@ enum EstadoSolicitud {
   FINALIZADA
 }
 
+enum ModalidadPrecio {
+  FIJO
+  RANGO
+}
+
 model Usuario {
   id            String     @id @default(uuid())
   nombre        String
   apellido      String
-  email         String     @unique
+  email         String
   passwordHash  String     @map("password_hash")
   fechaRegistro DateTime   @default(now()) @map("fecha_registro")
   isActivo      Boolean    @default(true) @map("is_activo")
@@ -38,6 +43,8 @@ model Usuario {
   administrador Administrador?
   prestador     Prestador?
   cliente       Cliente?
+
+  @@unique([email, rol])
 
   @@map("usuarios")
 }
@@ -78,6 +85,7 @@ model Cliente {
   usuarioId         String   @unique @map("usuario_id")
   latitudUbicacion  Decimal? @map("latitud_ubicacion")
   longitudUbicacion Decimal? @map("longitud_ubicacion")
+  fotoPerfil        String?  @map("foto_perfil")
 
   solicitudes Solicitud[]
 
@@ -100,6 +108,9 @@ model PrestadorOficio {
   oficioId     String   @map("A")
   prestadorId  String   @map("B")
   precio       Decimal? @db.Decimal(12, 2)
+  modalidadPrecio ModalidadPrecio @default(FIJO) @map("modalidad_precio")
+  precioMinimo    Decimal?        @map("precio_minimo") @db.Decimal(12, 2)
+  precioMaximo    Decimal?        @map("precio_maximo") @db.Decimal(12, 2)
   isDisponible Boolean  @default(true) @map("is_disponible")
 
   oficio    Oficio    @relation(fields: [oficioId], references: [id], onDelete: Cascade)
@@ -117,6 +128,7 @@ model Solicitud {
   fechaCreacion      DateTime        @default(now()) @map("fecha_creacion")
   fechaActualizacion DateTime        @updatedAt @map("fecha_actualizacion")
   fechaPropuesta     DateTime?       @map("fecha_propuesta")
+  fechaFinalizacion  DateTime?       @map("fecha_finalizacion")
   notaPropuesta      String?         @map("nota_propuesta")
 
   cliente     Cliente   @relation(fields: [clienteId], references: [id])
