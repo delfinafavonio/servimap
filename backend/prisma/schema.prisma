@@ -10,6 +10,7 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
 enum RolUsuario {
   ADMINISTRADOR
   PRESTADOR
@@ -27,6 +28,7 @@ enum EstadoSolicitud {
 model Usuario {
   id            String     @id @default(uuid())
   nombre        String
+  apellido      String
   email         String     @unique
   passwordHash  String     @map("password_hash")
   fechaRegistro DateTime   @default(now()) @map("fecha_registro")
@@ -49,20 +51,24 @@ model Administrador {
 }
 
 model Prestador {
-  id                     String   @id @default(uuid())
-  usuario                Usuario  @relation(fields: [usuarioId], references: [id])
-  usuarioId              String   @unique @map("usuario_id")
-  descripcionProfesional String   @map("descripcion_profesional")
-  fotoPerfil             String?  @map("foto_perfil")
-  zonaCobertura          String   @map("zona_cobertura")
-  latitud                Decimal
-  longitud               Decimal
-  rangoPrecioAprox       String?  @map("rango_precio_aprox")
-  isDisponible           Boolean  @default(true) @map("is_disponible")
+  id        String  @id @default(uuid())
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+  usuarioId String  @unique @map("usuario_id")
 
-  oficios     Oficio[]
+  descripcionProfesional String?  @map("descripcion_profesional")
+  fotoPerfil             String?  @map("foto_perfil")
+  zonaCobertura          String?  @map("zona_cobertura")
+  latitud                Decimal?
+  longitud               Decimal?
+  rangoPrecioAprox       String?  @map("rango_precio_aprox")
+  telefono               String?
+  isDisponible           Boolean  @default(false) @map("is_disponible")
+
+  oficios     PrestadorOficio[]
   solicitudes Solicitud[]
 
+  @@index([isDisponible])
+  @@index([zonaCobertura])
   @@map("prestadores")
 }
 
@@ -80,14 +86,28 @@ model Cliente {
 
 model Oficio {
   id        String  @id @default(uuid())
-  nombre    String
+  nombre    String  @unique
   categoria String
   isActivo  Boolean @default(true) @map("is_activo")
 
-  prestadores Prestador[]
+  prestadores PrestadorOficio[]
   solicitudes Solicitud[]
 
   @@map("oficios")
+}
+
+model PrestadorOficio {
+  oficioId     String   @map("A")
+  prestadorId  String   @map("B")
+  precio       Decimal? @db.Decimal(12, 2)
+  isDisponible Boolean  @default(true) @map("is_disponible")
+
+  oficio    Oficio    @relation(fields: [oficioId], references: [id], onDelete: Cascade)
+  prestador Prestador @relation(fields: [prestadorId], references: [id], onDelete: Cascade)
+
+  @@id([oficioId, prestadorId], map: "_OficioToPrestador_AB_pkey")
+  @@index([prestadorId], map: "_OficioToPrestador_B_index")
+  @@map("_OficioToPrestador")
 }
 
 model Solicitud {
@@ -96,6 +116,8 @@ model Solicitud {
   estado             EstadoSolicitud @default(PENDIENTE)
   fechaCreacion      DateTime        @default(now()) @map("fecha_creacion")
   fechaActualizacion DateTime        @updatedAt @map("fecha_actualizacion")
+  fechaPropuesta     DateTime?       @map("fecha_propuesta")
+  notaPropuesta      String?         @map("nota_propuesta")
 
   cliente     Cliente   @relation(fields: [clienteId], references: [id])
   clienteId   String    @map("cliente_id")
@@ -106,15 +128,21 @@ model Solicitud {
 
   calificacion Calificacion?
 
+  @@index([clienteId])
+  @@index([prestadorId])
+  @@index([oficioId])
+  @@index([estado])
   @@map("solicitudes")
 }
 
 model Calificacion {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   puntaje          Int
   comentario       String
-  fechaPublicacion DateTime @default(now()) @map("fecha_publicacion")
-  isModerada       Boolean  @default(false) @map("is_moderada")
+  fechaPublicacion DateTime  @default(now()) @map("fecha_publicacion")
+  isModerada       Boolean   @default(false) @map("is_moderada")
+  motivoModeracion String?   @map("motivo_moderacion")
+  fechaModeracion  DateTime? @map("fecha_moderacion")
 
   solicitud   Solicitud @relation(fields: [solicitudId], references: [id])
   solicitudId String    @unique @map("solicitud_id")
