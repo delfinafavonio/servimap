@@ -153,14 +153,37 @@ describe('formularios y permisos principales', () => {
     const base = { estado: 'PROPUESTA_ENVIADA', descripcion: 'Trabajo propuesto', fechaCreacion: '2026-09-20T10:00:00Z', fechaPropuesta: '2099-09-28T15:00:00Z', oficio: { nombre: 'Electricidad' }, cliente: { usuario: { nombre: 'Ana', apellido: 'Pérez' } }, prestador: { usuario: { nombre: 'Leo', apellido: 'Gómez' } } };
     apiClient.get.mockResolvedValue({ data: [{ ...base, id: 'aceptar' }, { ...base, id: 'rechazar' }] });
     apiClient.patch.mockImplementation((url, payload) => Promise.resolve({ data: { ...base, id: url.includes('aceptar') ? 'aceptar' : 'rechazar', estado: payload.estado } }));
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const user = userEvent.setup(); render(<AuthContext.Provider value={{ usuario: { rol: 'CLIENTE' } }}><Requests /></AuthContext.Provider>);
     await user.click((await screen.findAllByRole('button', { name: 'Aceptar propuesta' }))[0]);
     await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/solicitudes/aceptar/estado', { estado: 'ACEPTADA' }));
     expect(screen.getByText('Propuesta aceptada correctamente.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Rechazar propuesta' }));
+    expect(screen.getByRole('heading', { name: '¿Cancelar solicitud?' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toHaveTextContent('Electricidad · Leo Gómez');
+    await user.click(screen.getByRole('button', { name: 'Volver' }));
+    expect(apiClient.patch).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Rechazar propuesta' }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }));
     await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/solicitudes/rechazar/estado', { estado: 'CANCELADA' }));
     expect(screen.getByRole('tab', { name: 'Canceladas' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('conserva el modal de cancelación del cliente cuando la API falla y evita duplicados', async () => {
+    const pending = { id: 'cancelar', estado: 'PENDIENTE', descripcion: 'Trabajo pendiente', fechaCreacion: '2026-09-20T10:00:00Z', oficio: { nombre: 'Plomería' }, cliente: { usuario: { nombre: 'Ana', apellido: 'Pérez' } }, prestador: { usuario: { nombre: 'Leo', apellido: 'Gómez' } } };
+    let rejectRequest;
+    apiClient.get.mockResolvedValue({ data: [pending] });
+    apiClient.patch.mockImplementation(() => new Promise((_resolve, reject) => { rejectRequest = reject; }));
+    const user = userEvent.setup(); render(<AuthContext.Provider value={{ usuario: { rol: 'CLIENTE' } }}><Requests /></AuthContext.Provider>);
+    await user.click(await screen.findByRole('button', { name: 'Cancelar' }));
+    const confirm = screen.getByRole('button', { name: 'Confirmar cancelación' });
+    await user.click(confirm);
+    expect(confirm).toBeDisabled();
+    await user.click(confirm);
+    expect(apiClient.patch).toHaveBeenCalledTimes(1);
+    rejectRequest({ response: { data: { error: 'No se pudo cancelar' } } });
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cancelar');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Activas' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('filtra solicitudes del prestador y envía una propuesta futura', async () => {
