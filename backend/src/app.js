@@ -5,12 +5,21 @@ const cookieParser = require('cookie-parser');
 const { rateLimit } = require('express-rate-limit');
 const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = require('./swagger');
+const { createOriginMatcher } = require('./utils/cors');
 
 const app = express();
 if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
-const origins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map((value) => value.trim());
+const isAllowedOrigin = createOriginMatcher(process.env.CORS_ORIGIN || 'http://localhost:5173');
+const corsOptions = {
+  origin: (origin, callback) => callback(null, isAllowedOrigin(origin)),
+  credentials: true,
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
+};
 app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", "'unsafe-inline'"], styleSrc: ["'self'", "'unsafe-inline'"], imgSrc: ["'self'", 'data:'] } } }));
-app.use(cors({ origin: origins, credentials: true }));
+app.use((req, res, next) => req.headers.origin && !isAllowedOrigin(req.headers.origin) ? res.status(403).json({ error: 'Origen no autorizado' }) : next());
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '3mb' }));
 app.use(cookieParser());
 

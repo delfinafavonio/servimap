@@ -4,6 +4,7 @@ const { canTransition } = require('../src/utils/solicitudes');
 const { normalizeEmail, parseCoordinates, publicUser, requireFields, validateRating } = require('../src/utils/validation');
 const { hasRole } = require('../src/utils/permissions');
 const { uploadProfileImage } = require('../src/utils/imageUpload');
+const { createOriginMatcher } = require('../src/utils/cors');
 
 test('normaliza correos sin exponer el hash del usuario', () => {
   assert.equal(normalizeEmail('  Persona@Ejemplo.COM '), 'persona@ejemplo.com');
@@ -21,6 +22,14 @@ test('valida campos obligatorios y coordenadas', () => {
 test('rechaza fotos de perfil con formato o tamaño inválido antes de subirlas', async () => {
   await assert.rejects(() => uploadProfileImage('data:image/gif;base64,R0lGODlh', 'perfil'), /JPG, PNG o WebP/);
   await assert.rejects(() => uploadProfileImage(`data:image/png;base64,${Buffer.alloc(2 * 1024 * 1024 + 1).toString('base64')}`, 'perfil'), /2 MB/);
+});
+
+test('CORS limita el comodín a previews del proyecto configurado', () => {
+  const allowed = createOriginMatcher('https://servimap.vercel.app,https://servimap-*.vercel.app');
+  assert.equal(allowed('https://servimap.vercel.app'), true);
+  assert.equal(allowed('https://servimap-git-entrega-orian.vercel.app'), true);
+  assert.equal(allowed('https://otro-proyecto.vercel.app'), false);
+  assert.equal(allowed('https://servimap.vercel.app.atacante.example'), false);
 });
 
 test('aplica permisos estrictos por rol', () => {

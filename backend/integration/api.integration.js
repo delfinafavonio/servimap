@@ -39,6 +39,32 @@ test('recorrido integral y reglas de seguridad sobre PostgreSQL aislado', async 
   await seedOficios(); await seedOficios();
   assert.equal(await prisma.oficio.count(), 8, 'El seed debe ser idempotente');
 
+  await t.test('CORS autoriza producción y previews de Vercel, y rechaza otros orígenes', async () => {
+    const allowedOrigins = ['https://servimap.vercel.app', 'https://servimap-git-entrega-orian.vercel.app'];
+    for (const origin of allowedOrigins) {
+      for (const path of ['/api/auth/registro', '/api/auth/login']) {
+        const preflight = await request(app).options(path).set('Origin', origin).set('Access-Control-Request-Method', 'POST').set('Access-Control-Request-Headers', 'content-type');
+        assert.equal(preflight.status, 204);
+        assert.equal(preflight.headers['access-control-allow-origin'], origin);
+        assert.match(preflight.headers['access-control-allow-methods'], /POST/);
+        assert.match(preflight.headers['access-control-allow-headers'], /Content-Type/i);
+        assert.equal(preflight.headers['access-control-allow-credentials'], 'true');
+      }
+      const corsPassword = `Cors-${password}`;
+      const registration = await request(app).post('/api/auth/registro').set('Origin', origin).send({ nombre: 'Cors', apellido: 'Prueba', email: email('cors'), password: corsPassword, confirmacion: corsPassword, rol: 'CLIENTE' });
+      assert.equal(registration.status, 201, registration.text);
+      assert.equal(registration.headers['access-control-allow-origin'], origin);
+      assert.equal(registration.headers['access-control-allow-credentials'], 'true');
+    }
+    const blockedOrigin = 'https://sitio-no-autorizado.example';
+    const before = await prisma.usuario.count();
+    const blockedPreflight = await request(app).options('/api/auth/registro').set('Origin', blockedOrigin).set('Access-Control-Request-Method', 'POST').set('Access-Control-Request-Headers', 'content-type');
+    assert.equal(blockedPreflight.status, 403); assert.equal(blockedPreflight.headers['access-control-allow-origin'], undefined);
+    const blockedPost = await request(app).post('/api/auth/registro').set('Origin', blockedOrigin).send({ nombre: 'Bloqueado', apellido: 'Prueba', email: email('bloqueado'), password, confirmacion: password, rol: 'CLIENTE' });
+    assert.equal(blockedPost.status, 403); assert.equal(blockedPost.headers['access-control-allow-origin'], undefined);
+    assert.equal(await prisma.usuario.count(), before, 'Un origen rechazado no debe crear usuarios');
+  });
+
   const adminEmail = email('admin');
   const adminUser = await prisma.usuario.create({ data: { nombre: 'Admin', apellido: 'Prueba', email: adminEmail, passwordHash: await bcrypt.hash(password, 12), rol: 'ADMINISTRADOR', administrador: { create: {} } } });
   const admin = request.agent(app);

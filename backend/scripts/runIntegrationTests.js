@@ -29,7 +29,7 @@ function runNode(args, env) {
 async function main() {
   const url = testUrl();
   await ensureDatabase(url);
-  const env = { ...process.env, NODE_ENV: 'test', DATABASE_URL: url.toString(), JWT_SECRET: process.env.TEST_JWT_SECRET || 'integration-secret-not-used-outside-tests' };
+  const env = { ...process.env, NODE_ENV: 'test', DATABASE_URL: url.toString(), JWT_SECRET: process.env.TEST_JWT_SECRET || 'integration-secret-not-used-outside-tests', CORS_ORIGIN: 'http://localhost:5173,https://servimap.vercel.app,https://servimap-*.vercel.app' };
   runNode([require.resolve('prisma/build/index.js'), 'migrate', 'deploy'], env);
   runNode(['--test', 'integration/api.integration.js'], env);
 }
