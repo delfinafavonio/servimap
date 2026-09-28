@@ -11,7 +11,7 @@ const OFICIOS_INICIALES = [
 async function seedOficios(client = prisma) {
   const results = [];
   for (const [nombre, categoria] of OFICIOS_INICIALES) {
-    results.push(await client.oficio.upsert({ where: { nombre }, create: { nombre, categoria, isActivo: true }, update: { categoria } }));
+    results.push(await client.oficio.upsert({ where: { nombre }, create: { nombre, categoria, isActivo: true }, update: {} }));
   }
   return results;
 }

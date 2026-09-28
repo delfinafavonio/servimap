@@ -38,6 +38,9 @@ test('recorrido integral y reglas de seguridad sobre PostgreSQL aislado', async 
   await cleanDatabase();
   await seedOficios(); await seedOficios();
   assert.equal(await prisma.oficio.count(), 8, 'El seed debe ser idempotente');
+  const catalog = await request(app).get('/api/oficios');
+  assert.equal(catalog.status, 200); assert.equal(catalog.body.length, 8);
+  assert.ok(catalog.body.every((item) => item.isActivo), 'El selector público debe recibir los oficios activos');
 
   await t.test('CORS autoriza producción y previews de Vercel, y rechaza otros orígenes', async () => {
     const allowedOrigins = ['https://servimap.vercel.app', 'https://servimap-git-entrega-orian.vercel.app'];

@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node --watch src/index.js",
-    "prestart": "npm run db:deploy",
+    "prestart": "npm run db:prepare",
     "start": "node src/index.js",
     "test": "node --test",
     "test:integration": "node scripts/runIntegrationTests.js",
@@ -17,6 +17,7 @@
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "db:deploy": "prisma migrate deploy",
+    "db:prepare": "npm run db:deploy && npm run seed",
     "admin:create": "node scripts/createAdmin.js",
     "seed": "node scripts/seed.js",
     "seed:demo": "node scripts/seedDemo.js"

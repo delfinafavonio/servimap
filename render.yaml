@@ -3,7 +3,7 @@ services:
     name: servimap-api
     runtime: node
     rootDir: backend
-    buildCommand: npm ci && npm run prisma:generate && npm run db:deploy
+    buildCommand: npm ci && npm run prisma:generate && npm run db:prepare
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeploy: true
