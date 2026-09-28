@@ -72,8 +72,11 @@ test('recorrido real de registro, perfil, búsqueda, solicitud y propuesta', asy
 
   await login(page, clientEmail);
   await page.getByRole('navigation').getByRole('link', { name: 'Mis solicitudes' }).click();
-  await expect(page.getByText('Aceptada')).toBeVisible();
+  await expect(page.getByText('Propuesta enviada')).toBeVisible();
   await expect(page.getByText(/Propuesta:/)).toBeVisible();
+  await page.getByRole('button', { name: 'Aceptar propuesta' }).click();
+  await expect(page.getByText('Propuesta aceptada correctamente.')).toBeVisible();
+  await expect(page.getByText('Aceptada', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/app');
   await expect(page.getByRole('link', { name: 'ServiMap' })).toBeVisible();

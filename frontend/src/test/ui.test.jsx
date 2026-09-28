@@ -149,6 +149,20 @@ describe('formularios y permisos principales', () => {
     await user.click(screen.getByRole('tab', { name: 'Canceladas' })); expect(screen.getByText('Rechazado')).toBeInTheDocument();
   });
 
+  it('permite al cliente aceptar o rechazar una propuesta', async () => {
+    const base = { estado: 'PROPUESTA_ENVIADA', descripcion: 'Trabajo propuesto', fechaCreacion: '2026-09-20T10:00:00Z', fechaPropuesta: '2099-09-28T15:00:00Z', oficio: { nombre: 'Electricidad' }, cliente: { usuario: { nombre: 'Ana', apellido: 'Pérez' } }, prestador: { usuario: { nombre: 'Leo', apellido: 'Gómez' } } };
+    apiClient.get.mockResolvedValue({ data: [{ ...base, id: 'aceptar' }, { ...base, id: 'rechazar' }] });
+    apiClient.patch.mockImplementation((url, payload) => Promise.resolve({ data: { ...base, id: url.includes('aceptar') ? 'aceptar' : 'rechazar', estado: payload.estado } }));
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const user = userEvent.setup(); render(<AuthContext.Provider value={{ usuario: { rol: 'CLIENTE' } }}><Requests /></AuthContext.Provider>);
+    await user.click((await screen.findAllByRole('button', { name: 'Aceptar propuesta' }))[0]);
+    await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/solicitudes/aceptar/estado', { estado: 'ACEPTADA' }));
+    expect(screen.getByText('Propuesta aceptada correctamente.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Rechazar propuesta' }));
+    await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/solicitudes/rechazar/estado', { estado: 'CANCELADA' }));
+    expect(screen.getByRole('tab', { name: 'Canceladas' })).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('filtra solicitudes del prestador y envía una propuesta futura', async () => {
     const pending = { id: 's1', estado: 'PENDIENTE', descripcion: 'Revisar instalación', fechaCreacion: '2026-09-25T10:00:00Z', distanciaKm: 3.2, oficio: { nombre: 'Electricidad' }, cliente: { usuario: { nombre: 'Ana', apellido: 'Pérez' } }, prestador: { usuario: { nombre: 'Leo', apellido: 'Gómez' } } };
     apiClient.get.mockResolvedValue({ data: [pending, { ...pending, id: 's2', estado: 'ACEPTADA' }] });
@@ -164,7 +178,7 @@ describe('formularios y permisos principales', () => {
     await user.type(screen.getByLabelText('Horario'), '15:30');
     await user.type(screen.getByLabelText('Nota opcional'), 'Disponible por la tarde');
     await user.click(screen.getByRole('button', { name: 'Enviar propuesta' }));
-    await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/solicitudes/s1/estado', expect.objectContaining({ estado: 'ACEPTADA', notaPropuesta: 'Disponible por la tarde' })));
+    await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/solicitudes/s1/estado', expect.objectContaining({ estado: 'PROPUESTA_ENVIADA', notaPropuesta: 'Disponible por la tarde' })));
     expect(screen.getByRole('tab', { name: 'Propuestas enviadas' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByText('Propuesta enviada correctamente.')).toBeInTheDocument();
@@ -179,7 +193,8 @@ describe('formularios y permisos principales', () => {
     await user.type(screen.getByLabelText('Fecha'), '2000-01-01'); await user.type(screen.getByLabelText('Horario'), '10:00');
     await user.click(screen.getByRole('button', { name: 'Enviar propuesta' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Seleccioná una fecha y un horario futuros');
-    await user.clear(screen.getByLabelText('Fecha')); await user.type(screen.getByLabelText('Fecha'), new Date().toISOString().slice(0, 10));
+    const current = new Date(); const localToday = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+    await user.clear(screen.getByLabelText('Fecha')); await user.type(screen.getByLabelText('Fecha'), localToday);
     await user.clear(screen.getByLabelText('Horario')); await user.type(screen.getByLabelText('Horario'), '00:00');
     await user.click(screen.getByRole('button', { name: 'Enviar propuesta' }));
     expect(apiClient.patch).not.toHaveBeenCalled();

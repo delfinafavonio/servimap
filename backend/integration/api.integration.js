@@ -223,14 +223,19 @@ test('recorrido integral y reglas de seguridad sobre PostgreSQL aislado', async 
     const created = await client.post('/api/solicitudes').send({ prestadorId: activeProvider.id, oficioId: electricidad.id, descripcion: 'Revisar tablero eléctrico del hogar.' });
     assert.equal(created.status, 201); assert.equal(created.body.estado, 'PENDIENTE');
     const id = created.body.id;
-    assert.equal((await otherProvider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'ACEPTADA', fechaPropuesta: futureProposal })).status, 403);
-    assert.equal((await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'ACEPTADA', fechaPropuesta: new Date(Date.now() - 86_400_000).toISOString() })).status, 400);
-    const accepted = await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'ACEPTADA', fechaPropuesta: futureProposal, notaPropuesta: 'Disponible por la tarde.' });
-    assert.equal(accepted.status, 200); assert.equal(accepted.body.notaPropuesta, 'Disponible por la tarde.');
+    assert.equal((await otherProvider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'PROPUESTA_ENVIADA', fechaPropuesta: futureProposal })).status, 403);
+    assert.equal((await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'PROPUESTA_ENVIADA', fechaPropuesta: new Date(Date.now() - 86_400_000).toISOString() })).status, 400);
+    const proposed = await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'PROPUESTA_ENVIADA', fechaPropuesta: futureProposal, notaPropuesta: 'Disponible por la tarde.' });
+    assert.equal(proposed.status, 200); assert.equal(proposed.body.estado, 'PROPUESTA_ENVIADA'); assert.equal(proposed.body.notaPropuesta, 'Disponible por la tarde.');
     const visibleToClient = await client.get(`/api/solicitudes/${id}`);
-    assert.equal(visibleToClient.status, 200); assert.equal(visibleToClient.body.estado, 'ACEPTADA'); assert.equal(visibleToClient.body.fechaPropuesta, futureProposal);
-    assert.equal((await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'ACEPTADA', fechaPropuesta: futureProposal })).status, 409);
+    assert.equal(visibleToClient.status, 200); assert.equal(visibleToClient.body.estado, 'PROPUESTA_ENVIADA'); assert.equal(visibleToClient.body.fechaPropuesta, futureProposal);
+    assert.equal((await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'PROPUESTA_ENVIADA', fechaPropuesta: futureProposal })).status, 409);
     assert.equal((await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'RECHAZADA' })).status, 409);
+    assert.equal((await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'FINALIZADA' })).status, 409);
+    assert.equal((await otherClient.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'ACEPTADA' })).status, 403);
+    const accepted = await client.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'ACEPTADA' });
+    assert.equal(accepted.status, 200); assert.equal(accepted.body.estado, 'ACEPTADA');
+    assert.equal((await client.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'ACEPTADA' })).status, 409);
     assert.equal((await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'FINALIZADA' })).status, 409);
     await prisma.solicitud.update({ where: { id }, data: { fechaPropuesta: new Date(Date.now() - 60_000) } });
     const finalized = await provider.patch(`/api/solicitudes/${id}/estado`).send({ estado: 'FINALIZADA' });
@@ -243,10 +248,14 @@ test('recorrido integral y reglas de seguridad sobre PostgreSQL aislado', async 
     assert.equal((await client.patch(`/api/solicitudes/${cancellable.body.id}/estado`).send({ estado: 'CANCELADA' })).status, 200);
     const rejectable = await client.post('/api/solicitudes').send({ prestadorId: activeProvider.id, oficioId: electricidad.id, descripcion: 'Solicitud para rechazar.' });
     assert.equal((await provider.patch(`/api/solicitudes/${rejectable.body.id}/estado`).send({ estado: 'RECHAZADA' })).status, 200);
+    const proposalToReject = await client.post('/api/solicitudes').send({ prestadorId: activeProvider.id, oficioId: electricidad.id, descripcion: 'Propuesta que rechazará el cliente.' });
+    assert.equal((await provider.patch(`/api/solicitudes/${proposalToReject.body.id}/estado`).send({ estado: 'PROPUESTA_ENVIADA', fechaPropuesta: futureProposal })).status, 200);
+    assert.equal((await client.patch(`/api/solicitudes/${proposalToReject.body.id}/estado`).send({ estado: 'CANCELADA' })).status, 200);
+    assert.equal((await provider.patch(`/api/solicitudes/${proposalToReject.body.id}/estado`).send({ estado: 'FINALIZADA' })).status, 409);
 
     const concurrent = await client.post('/api/solicitudes').send({ prestadorId: activeProvider.id, oficioId: electricidad.id, descripcion: 'Prueba de concurrencia.' });
     const concurrentResults = await Promise.all([
-      provider.patch(`/api/solicitudes/${concurrent.body.id}/estado`).send({ estado: 'ACEPTADA', fechaPropuesta: futureProposal }),
+      provider.patch(`/api/solicitudes/${concurrent.body.id}/estado`).send({ estado: 'PROPUESTA_ENVIADA', fechaPropuesta: futureProposal }),
       provider.patch(`/api/solicitudes/${concurrent.body.id}/estado`).send({ estado: 'RECHAZADA' }),
     ]);
     assert.deepEqual(concurrentResults.map((item) => item.status).sort(), [200, 409]);

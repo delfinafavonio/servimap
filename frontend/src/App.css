@@ -142,6 +142,7 @@ blockquote p { margin: 4px 0 0; }
 .status.aceptada, .status.finalizada { color: #28604e; background: #ddf3e9; }
 .status.rechazada, .status.cancelada { color: #873341; background: #fbe5e8; }
 .status.pendiente { color: #7c5b28; background: #fff0ce; }
+.status.propuesta_enviada { color: #7c5b28; background: #fff0ce; }
 .rating, .review-item strong { color: #b87542; letter-spacing: 2px; }
 .review-form { margin-top: 20px; max-width: 600px; display: grid; gap: 15px; }
 .admin-grid { grid-template-columns: 320px 1fr; }

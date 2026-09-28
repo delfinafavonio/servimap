@@ -18,7 +18,7 @@ module.exports = {
       ServicioInput: { type: 'object', required: ['modalidadPrecio'], properties: { modalidadPrecio: { type: 'string', enum: ['FIJO', 'RANGO'] }, precio: { type: 'number', exclusiveMinimum: 0, nullable: true }, precioMinimo: { type: 'number', exclusiveMinimum: 0, nullable: true }, precioMaximo: { type: 'number', exclusiveMinimum: 0, nullable: true }, isDisponible: { type: 'boolean' } } },
       UbicacionCliente: { type: 'object', required: ['latitudUbicacion', 'longitudUbicacion'], properties: { latitudUbicacion: { type: 'number', minimum: -90, maximum: 90 }, longitudUbicacion: { type: 'number', minimum: -180, maximum: 180 } } },
       SolicitudInput: { type: 'object', required: ['prestadorId', 'oficioId', 'descripcion'], properties: { prestadorId: { type: 'string', format: 'uuid' }, oficioId: { type: 'string', format: 'uuid' }, descripcion: { type: 'string', maxLength: 2000 } } },
-      EstadoSolicitud: { type: 'object', required: ['estado'], properties: { estado: { type: 'string', enum: ['ACEPTADA', 'RECHAZADA', 'CANCELADA', 'FINALIZADA'] } } },
+      EstadoSolicitud: { type: 'object', required: ['estado'], properties: { estado: { type: 'string', enum: ['PROPUESTA_ENVIADA', 'ACEPTADA', 'RECHAZADA', 'CANCELADA', 'FINALIZADA'] } } },
       CalificacionInput: { type: 'object', required: ['solicitudId', 'puntaje', 'comentario'], properties: { solicitudId: { type: 'string', format: 'uuid' }, puntaje: { type: 'integer', minimum: 1, maximum: 5 }, comentario: { type: 'string', maxLength: 1000 } } },
       ModeracionInput: { type: 'object', required: ['isModerada'], properties: { isModerada: { type: 'boolean' }, motivo: { type: 'string', maxLength: 500 } } },
     },

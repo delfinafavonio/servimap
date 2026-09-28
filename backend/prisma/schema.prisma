@@ -19,6 +19,7 @@ enum RolUsuario {
 
 enum EstadoSolicitud {
   PENDIENTE
+  PROPUESTA_ENVIADA
   ACEPTADA
   RECHAZADA
   CANCELADA

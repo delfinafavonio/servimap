@@ -39,7 +39,10 @@ test('aplica permisos estrictos por rol', () => {
 });
 
 test('acepta sólo las transiciones de solicitud definidas por rol', () => {
-  assert.equal(canTransition('PRESTADOR', 'PENDIENTE', 'ACEPTADA'), true);
+  assert.equal(canTransition('PRESTADOR', 'PENDIENTE', 'PROPUESTA_ENVIADA'), true);
+  assert.equal(canTransition('PRESTADOR', 'PENDIENTE', 'ACEPTADA'), false);
+  assert.equal(canTransition('CLIENTE', 'PROPUESTA_ENVIADA', 'ACEPTADA'), true);
+  assert.equal(canTransition('CLIENTE', 'PROPUESTA_ENVIADA', 'CANCELADA'), true);
   assert.equal(canTransition('PRESTADOR', 'ACEPTADA', 'FINALIZADA'), true);
   assert.equal(canTransition('CLIENTE', 'PENDIENTE', 'CANCELADA'), true);
   assert.equal(canTransition('CLIENTE', 'PENDIENTE', 'FINALIZADA'), false);

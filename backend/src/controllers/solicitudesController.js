@@ -67,7 +67,7 @@ async function cambiarEstado(req, res) {
     throw new ApiError(409, `Transición inválida de ${solicitud.estado} a ${req.body.estado}`);
   }
   const data = { estado: req.body.estado };
-  if (req.usuario.rol === 'PRESTADOR' && req.body.estado === 'ACEPTADA') {
+  if (req.usuario.rol === 'PRESTADOR' && req.body.estado === 'PROPUESTA_ENVIADA') {
     requireFields(req.body, ['fechaPropuesta']);
     const fechaPropuesta = new Date(req.body.fechaPropuesta);
     if (Number.isNaN(fechaPropuesta.getTime()) || fechaPropuesta <= new Date()) throw new ApiError(400, 'La fecha y el horario propuestos deben ser futuros');
