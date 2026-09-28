@@ -30,8 +30,10 @@ async function register(agent, rol, prefix) {
   assert.equal(response.status, 201, response.text);
   assert.ok(response.headers['set-cookie']?.some((cookie) => cookie.includes('HttpOnly') && cookie.includes('SameSite=Lax')));
   assert.equal(response.body.usuario.rol, rol);
+  assert.equal(typeof response.body.token, 'string');
+  assert.ok(response.body.token.length > 20);
   assert.equal(response.body.usuario.passwordHash, undefined);
-  return { ...payload, usuario: response.body.usuario };
+  return { ...payload, usuario: response.body.usuario, token: response.body.token };
 }
 
 test('recorrido integral y reglas de seguridad sobre PostgreSQL aislado', async (t) => {
@@ -91,8 +93,13 @@ test('recorrido integral y reglas de seguridad sobre PostgreSQL aislado', async 
     assert.equal((await request(app).post('/api/auth/registro').send({ ...clientData, confirmacion: password })).status, 409);
     assert.equal((await request(app).post('/api/auth/registro').send({ nombre: 'Admin', apellido: 'Ilegal', email: email('admin-publico'), password, confirmacion: password, rol: 'ADMINISTRADOR' })).status, 400);
     assert.equal((await request(app).post('/api/auth/login').send({ email: clientData.email, password: 'incorrecta', rol: 'CLIENTE' })).status, 401);
-    assert.equal((await request(app).post('/api/auth/login').send({ email: clientData.email, password, rol: 'CLIENTE' })).status, 200);
-    assert.equal((await request(app).post('/api/auth/login').send({ email: providerData.email, password, rol: 'PRESTADOR' })).status, 200);
+    const clientLogin = await request(app).post('/api/auth/login').send({ email: clientData.email, password, rol: 'CLIENTE' });
+    assert.equal(clientLogin.status, 200); assert.equal(typeof clientLogin.body.token, 'string');
+    const providerLogin = await request(app).post('/api/auth/login').send({ email: providerData.email, password, rol: 'PRESTADOR' });
+    assert.equal(providerLogin.status, 200); assert.equal(typeof providerLogin.body.token, 'string');
+    assert.equal((await request(app).get('/api/auth/me').set('Authorization', `Bearer ${providerLogin.body.token}`)).body.usuario.rol, 'PRESTADOR');
+    assert.equal((await request(app).get('/api/prestadores/me').set('Authorization', `Bearer ${providerLogin.body.token}`)).status, 200);
+    assert.equal((await request(app).post('/api/solicitudes').set('Authorization', `Bearer ${clientLogin.body.token}`).send({})).status, 400);
     const clientAsProvider = request.agent(app);
     assert.equal((await clientAsProvider.post('/api/auth/login').send({ email: clientData.email, password, rol: 'PRESTADOR' })).status, 401);
     assert.equal((await clientAsProvider.get('/api/auth/me')).status, 401);

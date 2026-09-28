@@ -47,8 +47,9 @@ async function registro(req, res) {
         ...(rol === 'CLIENTE' ? { cliente: { create: {} } } : { prestador: { create: {} } }),
       },
     });
-    setSession(res, tokenFor(usuario));
-    res.status(201).json({ usuario: publicUser(usuario) });
+    const token = tokenFor(usuario);
+    setSession(res, token);
+    res.status(201).json({ usuario: publicUser(usuario), token });
   } catch (error) {
     if (error.code === 'P2002') throw new ApiError(409, 'Ya existe una cuenta con ese correo y rol');
     throw error;
@@ -63,8 +64,9 @@ async function login(req, res) {
   const valid = usuario ? await bcrypt.compare(req.body.password, usuario.passwordHash) : false;
   if (!valid) throw new ApiError(401, 'Correo o contraseña incorrectos');
   if (!usuario.isActivo) throw new ApiError(403, 'La cuenta está desactivada');
-  setSession(res, tokenFor(usuario));
-  res.json({ usuario: publicUser(usuario) });
+  const token = tokenFor(usuario);
+  setSession(res, token);
+  res.json({ usuario: publicUser(usuario), token });
 }
 
 async function me(req, res) {

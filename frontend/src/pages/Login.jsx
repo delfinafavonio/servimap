@@ -8,7 +8,7 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
-  const { login, usuario } = useAuth();
+  const { login, usuario, authMessage } = useAuth();
   const navigate = useNavigate();
   if (usuario) return <Navigate to={usuario.rol === 'PRESTADOR' ? '/app/solicitudes' : '/app'} replace />;
 
@@ -32,7 +32,7 @@ export default function Login() {
       </div>
       <label className="sr-only" htmlFor="email">Correo</label><input id="email" type="email" placeholder="nombre@correo.com" className="login-input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
       <label className="sr-only" htmlFor="password">Contraseña</label><input id="password" type="password" placeholder="••••••••••" className="login-input" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {(error || authMessage) && <p className="form-error" role="alert">{error || authMessage}</p>}
       <button className="login-btn login-btn-primary" disabled={sending}>{sending ? 'Ingresando…' : 'Ingresar'}</button><Link className="login-btn login-btn-secondary" to={`/registro/${role.toLowerCase()}`}>Crear cuenta</Link>
     </form>
   </div>;

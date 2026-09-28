@@ -26,6 +26,9 @@ async function login(page, email, role = 'CLIENTE') {
 test('recorrido real de registro, perfil, búsqueda, solicitud y propuesta', async ({ page }) => {
   await register(page, 'prestador', providerEmail, 'Profesional');
   await expect(page).toHaveURL(/\/app\/perfil/);
+  await page.reload();
+  await expect(page).toHaveURL(/\/app\/perfil/);
+  await expect(page.getByRole('button', { name: 'Editar perfil' })).toBeVisible();
   await page.getByRole('button', { name: 'Editar perfil' }).click();
   await page.getByLabel('Oficio ofrecido').selectOption({ label: 'Electricidad' });
   await page.getByLabel('Precio orientativo').fill('25000');
@@ -43,6 +46,8 @@ test('recorrido real de registro, perfil, búsqueda, solicitud y propuesta', asy
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
 
   await register(page, 'cliente', clientEmail, 'Cliente');
+  await expect(page).toHaveURL(/\/app\/buscar$/);
+  await page.reload();
   await expect(page).toHaveURL(/\/app\/buscar$/);
   await expect(page.locator('.leaflet-container')).toBeVisible();
   await expect(page.locator('img.leaflet-tile').first()).toBeAttached();
