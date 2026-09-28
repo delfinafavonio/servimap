@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "node --watch src/index.js",
+    "prestart": "npm run db:deploy",
     "start": "node src/index.js",
     "test": "node --test",
     "test:integration": "node scripts/runIntegrationTests.js",
@@ -36,10 +37,10 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.0",
+    "prisma": "^7.10.0",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
-    "prisma": "^7.10.0",
     "supertest": "^7.3.0"
   }
 }
